@@ -10,119 +10,185 @@ const auth = require('basic-auth');
 const si = require('systeminformation');
 const { exec } = require('child_process');
 
-// --- CONFIGURATION ---
+// ==========================================
+// ⚙️ CONFIGURATION
+// ==========================================
 const PORT = 8080;
+const USERNAME = "admin";
+const PASSWORD = "password123"; // CHANGE THIS FOR SECURITY!
 const MAIN_DIR = "/home/opc";
-const PANEL_DIR = path.join(MAIN_DIR, "panels"); // Where sub-panels live
-const CONFIG_FILE = './admin-config.json';
+const PANEL_DIR = path.join(MAIN_DIR, "panels"); // Sub-panels live here
 
-// Ensure directories
+// Ensure sub-panel directory exists
 fs.ensureDirSync(PANEL_DIR);
-
-// Load or Create Admin Config
-let adminConfig = { username: "admin", password: "password123" };
-if (fs.existsSync(CONFIG_FILE)) {
-    adminConfig = fs.readJsonSync(CONFIG_FILE);
-} else {
-    fs.writeJsonSync(CONFIG_FILE, adminConfig);
-}
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const upload = multer({ dest: 'temp_uploads/' });
 
-app.use(express.json());
 app.use(express.static('public'));
+app.use(express.json());
 
-// --- AUTH MIDDLEWARE ---
-const checkAuth = (req, res, next) => {
+// --- SECURITY: LOGIN SYSTEM ---
+app.use((req, res, next) => {
     const user = auth(req);
-    if (!user || user.name !== adminConfig.username || user.pass !== adminConfig.password) {
-        res.set('WWW-Authenticate', 'Basic realm="Orion Master"');
+    if (!user || user.name !== USERNAME || user.pass !== PASSWORD) {
+        res.set('WWW-Authenticate', 'Basic realm="ORION Master"');
         return res.status(401).send('Access Denied');
     }
     next();
-};
-app.use(checkAuth);
+});
 
 // ==========================================
-// 1. VM MANAGER & TERMINAL
+// 1. DASHBOARD & PM2 (Bot Manager)
+// ==========================================
+
+app.get('/api/status', (req, res) => {
+    pm2.list((err, list) => {
+        if (err) return res.status(500).json([]);
+        
+        const bots = list.map(proc => ({
+            name: proc.name,
+            id: proc.pm_id,
+            status: proc.pm2_env.status,
+            memory: (proc.monit.memory / 1024 / 1024).toFixed(1) + ' MB',
+            cpu: proc.monit.cpu + ' %'
+        }));
+        res.json(bots);
+    });
+});
+
+app.post('/api/action', (req, res) => {
+    const { name, action } = req.body;
+    if (!['start', 'stop', 'restart', 'delete'].includes(action)) return res.status(400).json({ error: "Invalid Action" });
+
+    pm2[action](name, (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// ==========================================
+// 2. VM MANAGER (Power Controls)
 // ==========================================
 
 app.post('/api/vm/power', (req, res) => {
     const { action } = req.body;
     let cmd = "";
+    
     if (action === 'reboot') cmd = "sudo reboot";
     if (action === 'shutdown') cmd = "sudo shutdown now";
     
     if (cmd) {
         exec(cmd, (err) => {
-            if (err) return res.status(500).json({ error: "Command failed. Do I have sudo?" });
-            res.json({ success: true, message: "Signal sent." });
+            if (err) return res.status(500).json({ error: "Command Failed (Sudo issue?)" });
+            res.json({ success: true, message: "Signal Sent to Oracle Cloud." });
         });
     } else {
-        res.status(400).json({ error: "Invalid action" });
+        res.status(400).json({ error: "Unknown Action" });
     }
 });
 
-app.post('/api/terminal', (req, res) => {
-    const { command } = req.body;
-    // SECURITY WARNING: This executes root commands
-    exec(command, { cwd: MAIN_DIR }, (error, stdout, stderr) => {
-        res.json({ output: stdout || stderr || error?.message || "Done." });
+// ==========================================
+// 3. FILE MANAGER & CLEANER
+// ==========================================
+
+app.get('/api/files', (req, res) => {
+    // Uses Linux 'du' to check folder sizes in /home/opc
+    exec(`du -sh ${MAIN_DIR}/*`, (err, stdout) => {
+        if (err) return res.json([]);
+        
+        const lines = stdout.trim().split('\n');
+        const files = lines.map(line => {
+            const [size, fullPath] = line.split('\t');
+            return { 
+                name: path.basename(fullPath), 
+                size: size,
+                // Check if this folder has a running bot
+                isRunning: false // Simplified for speed
+            };
+        }).filter(f => f.name !== 'Panal' && f.name !== 'panels'); 
+        
+        res.json(files);
     });
 });
 
-// ==========================================
-// 2. FILE & BOT MANAGER
-// ==========================================
-
-app.get('/api/files', async (req, res) => {
-    try {
-        // Get all PM2 processes to know what is running
-        pm2.list((err, list) => {
-            const runningPaths = list ? list.map(p => p.pm2_env.pm_cwd) : [];
-            
-            exec(`du -sh ${MAIN_DIR}/*`, async (err, stdout) => {
-                if (err) return res.json([]);
-                const lines = stdout.trim().split('\n');
-                
-                const files = lines.map(line => {
-                    const [size, fullPath] = line.split('\t');
-                    const name = path.basename(fullPath);
-                    const isRunning = runningPaths.some(p => p.includes(name));
-                    return { name, size, isRunning };
-                }).filter(f => f.name !== 'Panal' && f.name !== 'panels'); // Hide system folders
-                
-                res.json(files);
-            });
-        });
-    } catch (e) { res.status(500).json([]); }
-});
-
-app.post('/api/delete-bot', async (req, res) => {
+app.post('/api/delete-bot', (req, res) => {
     const { name } = req.body;
-    if(!name || name.includes('..')) return res.status(400).send("Invalid name");
+    if (!name || name.includes('..') || name === 'Panal') return res.status(403).json({ error: "Protected" });
 
     const targetPath = path.join(MAIN_DIR, name);
 
-    // 1. Stop & Delete from PM2 if running
-    pm2.list((err, list) => {
-        const proc = list.find(p => p.name === name || p.pm2_env.pm_cwd.includes(name));
-        if (proc) {
-            pm2.delete(proc.pm_id, () => {});
-        }
-        
+    // 1. Delete from PM2
+    pm2.delete(name, () => {
         // 2. Delete Files
         fs.remove(targetPath)
-            .then(() => res.json({ success: true }))
-            .catch(err => res.status(500).json({ error: err.message }));
+            .then(() => {
+                pm2.save(); // Save the new list
+                res.json({ success: true });
+            })
+            .catch(e => res.status(500).json({ error: e.message }));
+    });
+});
+
+app.post('/api/clear-bot', (req, res) => {
+    const { name } = req.body;
+    const targetPath = path.join(MAIN_DIR, name);
+    
+    // Deletes contents but keeps folder
+    fs.emptyDir(targetPath)
+        .then(() => res.json({ success: true }))
+        .catch(e => res.status(500).json({ error: e.message }));
+});
+
+// --- UPLOAD & DEPLOY ---
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: "No file" });
+        
+        const zip = new AdmZip(req.file.path);
+        const folderName = req.body.folderName || 'new-bot';
+        const targetPath = path.join(MAIN_DIR, folderName);
+
+        await fs.ensureDir(targetPath);
+        zip.extractAllTo(targetPath, true);
+        await fs.remove(req.file.path);
+
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ==========================================
+// 4. TERMINAL (Command Runner)
+// ==========================================
+
+app.post('/api/terminal', (req, res) => {
+    const { command } = req.body;
+    // Executes command in /home/opc
+    exec(command, { cwd: MAIN_DIR }, (error, stdout, stderr) => {
+        res.json({ 
+            output: stdout || stderr || (error ? error.message : "Done.") 
+        });
     });
 });
 
 // ==========================================
-// 3. SUB-PANEL CREATOR
+// 5. SETTINGS (Password & Env)
+// ==========================================
+
+app.post('/api/save-env', async (req, res) => {
+    const { folder, content } = req.body;
+    try {
+        await fs.writeFile(path.join(MAIN_DIR, folder, '.env'), content);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==========================================
+// 6. PANEL CREATOR (Sub-Panels)
 // ==========================================
 
 app.get('/api/panels', async (req, res) => {
@@ -130,8 +196,10 @@ app.get('/api/panels', async (req, res) => {
         const panels = await fs.readdir(PANEL_DIR);
         const data = [];
         for (const p of panels) {
-            const conf = await fs.readJson(path.join(PANEL_DIR, p, 'config.json')).catch(()=>({}));
-            data.push({ name: p, port: conf.port, limit: conf.limit });
+            try {
+                const conf = await fs.readJson(path.join(PANEL_DIR, p, 'config.json'));
+                data.push({ name: p, port: conf.port, limit: conf.limit });
+            } catch(e){}
         }
         res.json(data);
     } catch (e) { res.json([]); }
@@ -139,37 +207,34 @@ app.get('/api/panels', async (req, res) => {
 
 app.post('/api/create-panel', async (req, res) => {
     const { name, password, port, limit } = req.body;
-    const newPanelPath = path.join(PANEL_DIR, name);
+    const newPath = path.join(PANEL_DIR, name);
 
-    if (fs.existsSync(newPanelPath)) return res.status(400).json({ error: "Panel exists" });
+    if (fs.existsSync(newPath)) return res.status(400).json({ error: "Panel Exists" });
 
     try {
-        await fs.ensureDir(newPanelPath);
-        await fs.ensureDir(path.join(newPanelPath, 'uploads'));
+        await fs.ensureDir(newPath);
+        await fs.ensureDir(path.join(newPath, 'public'));
         
-        // 1. Generate Lite Server Script
-        const liteServerCode = generateLiteServer(port, name, password, limit);
-        await fs.writeFile(path.join(newPanelPath, 'server.js'), liteServerCode);
-        
-        // 2. Copy Frontend
-        await fs.copy(path.join(__dirname, 'public'), path.join(newPanelPath, 'public'));
-        
-        // 3. Save Config
-        await fs.writeJson(path.join(newPanelPath, 'config.json'), { port, password, limit });
+        // 1. Save Config
+        await fs.writeJson(path.join(newPath, 'config.json'), { port, password, limit });
 
-        // 4. Start with PM2
+        // 2. Create Lite Server File
+        const liteServer = generateLiteServer(port, name, password, limit);
+        await fs.writeFile(path.join(newPath, 'server.js'), liteServer);
+
+        // 3. Copy Frontend (Reuse current frontend)
+        await fs.copy(path.join(__dirname, 'public/index.html'), path.join(newPath, 'public/index.html'));
+
+        // 4. Start New Panel
         pm2.start({
-            script: path.join(newPanelPath, 'server.js'),
+            script: path.join(newPath, 'server.js'),
             name: `panel-${name}`
         }, (err) => {
-            if (err) throw err;
             pm2.save();
             res.json({ success: true, url: `http://${req.hostname}:${port}` });
         });
 
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/delete-panel', async (req, res) => {
@@ -183,18 +248,8 @@ app.post('/api/delete-panel', async (req, res) => {
     });
 });
 
-// ==========================================
-// 4. SETTINGS
-// ==========================================
-app.post('/api/change-password', async (req, res) => {
-    const { newPassword } = req.body;
-    adminConfig.password = newPassword;
-    await fs.writeJson(CONFIG_FILE, adminConfig);
-    res.json({ success: true });
-});
-
-// --- HELPER: GENERATE LITE SERVER CODE ---
-function generateLiteServer(port, user, pass, limitMB) {
+// Helper: Generates code for sub-panels
+function generateLiteServer(port, user, pass, limit) {
     return `
 const express = require('express');
 const multer = require('multer');
@@ -202,14 +257,6 @@ const AdmZip = require('adm-zip');
 const fs = require('fs-extra');
 const path = require('path');
 const auth = require('basic-auth');
-const pm2 = require('pm2');
-
-const APP_DIR = __dirname;
-const UPLOAD_DIR = path.join(APP_DIR, 'bots');
-const LIMIT_BYTES = ${limitMB} * 1024 * 1024;
-
-fs.ensureDirSync(UPLOAD_DIR);
-
 const app = express();
 const upload = multer({ dest: 'temp/' });
 
@@ -225,57 +272,33 @@ app.use((req, res, next) => {
     next();
 });
 
-// Check Storage Limit
-const checkLimit = async () => {
-    const size = await getDirSize(UPLOAD_DIR);
-    return size < LIMIT_BYTES;
-};
-
-// Simplified API for Users
-app.post('/api/upload', upload.single('file'), async (req, res) => {
-    if (!(await checkLimit())) return res.status(400).json({ error: "Storage Limit Reached (${limitMB}MB)" });
-    
-    const zip = new AdmZip(req.file.path);
-    const name = req.body.folderName || 'bot-' + Date.now();
-    const target = path.join(UPLOAD_DIR, name);
-    
-    fs.ensureDirSync(target);
-    zip.extractAllTo(target, true);
-    fs.removeSync(req.file.path);
-    
-    res.json({ success: true });
-});
-
-app.get('/api/status', (req, res) => {
-    // Only show bots belonging to this user context if possible, 
-    // or just show all but allow limited control. 
-    // For simplicity, this lite panel lists bots in its folder.
-    res.json([]); 
-});
-
-// Users can only start/stop bots inside their folder
-// This requires complex PM2 linking, simplified here:
-app.listen(${port}, () => console.log('Sub-panel running on ${port}'));
-
-async function getDirSize(dir) {
-    // fast size check logic
-    return 0; // Placeholder
-}
+app.listen(${port}, () => console.log('Sub-panel running'));
 `;
 }
 
-// --- SYSTEM STATS SOCKET ---
+// --- REAL-TIME STATS ---
 io.on('connection', (socket) => {
-    setInterval(async () => {
+    // Send Stats every 2 seconds
+    const interval = setInterval(async () => {
         const mem = await si.mem();
         const cpu = await si.currentLoad();
         socket.emit('sys-stats', {
-            ram: (mem.active/1073741824).toFixed(2) + ' / ' + (mem.total/1073741824).toFixed(2) + ' GB',
+            ram: (mem.active / 1024 / 1024 / 1024).toFixed(2) + ' / ' + (mem.total / 1024 / 1024 / 1024).toFixed(2) + ' GB',
             cpu: cpu.currentLoad.toFixed(0) + '%'
         });
     }, 2000);
+
+    // Stream PM2 Logs
+    pm2.launchBus((err, bus) => {
+        bus.on('log:out', (p) => socket.emit('log', { type: 'out', data: p.data, app: p.process.name }));
+        bus.on('log:err', (p) => socket.emit('log', { type: 'err', data: p.data, app: p.process.name }));
+    });
+
+    socket.on('disconnect', () => clearInterval(interval));
 });
 
-server.listen(PORT, () => console.log(`MASTER ORION RUNNING ON ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`🚀 ORION Master running on PORT ${PORT}`);
+});
 
 

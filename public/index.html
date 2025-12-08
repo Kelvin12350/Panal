@@ -7,104 +7,84 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        /* --- ORIGINAL THEME --- */
         :root { --bg: #09090b; --card: #18181b; --accent: #00ff9d; --text: #e4e4e7; --danger: #ef4444; --dim: #71717a; }
         * { box-sizing: border-box; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; }
         
-        /* --- MOBILE HEADER (HAMBURGER) --- */
-        .mobile-header {
-            display: none; position: fixed; top: 0; left: 0; right: 0;
-            height: 60px; background: var(--card); border-bottom: 1px solid #333;
-            z-index: 1000; padding: 0 20px; align-items: center; justify-content: space-between;
-        }
+        /* MOBILE HEADER */
+        .mobile-header { display: none; position: fixed; top: 0; left: 0; right: 0; height: 60px; background: var(--card); border-bottom: 1px solid #333; z-index: 1000; padding: 0 20px; align-items: center; justify-content: space-between; }
         .hamburger { font-size: 24px; cursor: pointer; color: var(--accent); }
 
-        /* --- SIDEBAR --- */
-        .sidebar { 
-            width: 250px; background: var(--card); padding: 20px; 
-            border-right: 1px solid #333; display: flex; flex-direction: column; 
-            transition: transform 0.3s ease; z-index: 999;
-        }
-        
+        /* SIDEBAR */
+        .sidebar { width: 250px; background: var(--card); padding: 20px; border-right: 1px solid #333; display: flex; flex-direction: column; transition: transform 0.3s ease; z-index: 999; }
         .logo { font-size: 24px; font-weight: 800; color: var(--accent); margin-bottom: 40px; letter-spacing: 2px; }
         .menu-item { padding: 15px; cursor: pointer; border-radius: 10px; margin-bottom: 5px; color: var(--dim); transition: 0.3s; display: flex; align-items: center; gap: 10px; }
         .menu-item:hover, .menu-item.active { background: #27272a; color: var(--text); }
         .menu-item.active { border-left: 3px solid var(--accent); }
-        
         .sys-stats { margin-top: auto; padding: 15px; background: #000; border-radius: 10px; font-size: 12px; }
         .stat-bar { height: 4px; background: #333; margin-top: 5px; border-radius: 2px; overflow: hidden; }
         .stat-fill { height: 100%; background: var(--accent); width: 0%; transition: 1s; }
 
-        /* --- MAIN CONTENT --- */
+        /* MAIN CONTENT */
         .main { flex: 1; padding: 30px; overflow-y: auto; position: relative; }
         .section { display: none; animation: fadeIn 0.3s; }
         .section.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- RESPONSIVE LOGIC --- */
+        /* RESPONSIVE */
         @media (max-width: 768px) {
             .mobile-header { display: flex; }
-            .sidebar {
-                position: fixed; top: 60px; left: 0; bottom: 0;
-                transform: translateX(-100%); width: 80%; max-width: 300px;
-                border-right: 1px solid var(--accent);
-            }
+            .sidebar { position: fixed; top: 60px; left: 0; bottom: 0; transform: translateX(-100%); width: 80%; max-width: 300px; border-right: 1px solid var(--accent); }
             .sidebar.open { transform: translateX(0); }
             .main { padding-top: 80px; }
-            .overlay {
-                display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0,0,0,0.7); z-index: 900;
-            }
+            .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 900; }
             .overlay.active { display: block; }
         }
 
-        /* --- UI COMPONENTS --- */
+        /* UI ELEMENTS */
         .card { background: var(--card); padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #333; }
-        
         .status-dot { height: 10px; width: 10px; background: #333; border-radius: 50%; display: inline-block; margin-right: 8px; }
         .online { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
         .stopped { background: var(--danger); }
-        
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; margin: 5px; transition: 0.2s; font-size: 12px; color: #fff; }
+        .btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; margin: 5px; transition: 0.2s; font-size: 12px; color: #fff; }
         .btn-start { background: rgba(0, 255, 157, 0.1); color: var(--accent); }
         .btn-stop { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+        .btn-action { background: var(--accent); color: #000; width: 100%; margin: 10px 0; }
         .btn-restart { background: #333; }
         .btn-danger { background: var(--danger); }
-        .btn-action { background: var(--accent); color: #000; width: 100%; margin: 10px 0; }
-
-        input, select { width: 100%; background: #000; border: 1px solid #333; padding: 15px; color: #fff; border-radius: 5px; margin-top: 10px; box-sizing: border-box; }
-
-        /* Terminal Style */
-        .terminal { background: #000; padding: 20px; border-radius: 10px; height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc; border: 1px solid #333; }
         
-        /* Table Style */
+        input, select { width: 100%; background: #000; border: 1px solid #333; padding: 15px; color: #fff; border-radius: 5px; margin-top: 10px; box-sizing: border-box; }
+        .terminal { background: #000; padding: 20px; border-radius: 10px; height: 350px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc; border: 1px solid #333; }
+        
+        .upload-zone { border: 2px dashed #444; padding: 40px; text-align: center; border-radius: 15px; cursor: pointer; transition: 0.3s; }
         .file-table { width: 100%; border-collapse: collapse; }
         .file-table th { text-align: left; color: var(--dim); padding: 10px; border-bottom: 1px solid #333; }
         .file-table td { padding: 15px 10px; border-bottom: 1px solid #222; }
+        
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 34px; height: 20px; vertical-align: middle; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(14px); }
     </style>
 </head>
 <body>
-
-    <!-- Mobile Top Bar -->
     <div class="mobile-header">
         <div class="logo" style="margin:0; font-size: 18px;">ORION</div>
         <i class="fas fa-bars hamburger" onclick="toggleSidebar()"></i>
     </div>
-
-    <!-- Dark Overlay for Mobile -->
     <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
-    <!-- Sidebar Menu -->
     <div class="sidebar" id="sidebar">
         <div class="logo mobile-hidden"><i class="fas fa-rocket"></i> ORION</div>
-        
         <div class="menu-item active" onclick="showTab('console')"><i class="fas fa-tachometer-alt"></i> Dashboard</div>
-        <div class="menu-item" onclick="showTab('vm')"><i class="fas fa-server"></i> VM Manager</div>
+        <div class="menu-item" onclick="showTab('deploy')"><i class="fas fa-cloud-upload-alt"></i> Deploy</div>
         <div class="menu-item" onclick="showTab('files')"><i class="fas fa-folder"></i> File Manager</div>
+        <div class="menu-item" onclick="showTab('vm')"><i class="fas fa-server"></i> VM Manager</div>
         <div class="menu-item" onclick="showTab('term')"><i class="fas fa-terminal"></i> Terminal</div>
         <div class="menu-item" onclick="showTab('panels')"><i class="fas fa-users"></i> Sub-Panels</div>
-        <div class="menu-item" onclick="showTab('settings')"><i class="fas fa-cog"></i> Settings</div>
         
         <div class="sys-stats">
             <div>CPU <span id="cpu-val">0%</span></div>
@@ -115,10 +95,7 @@
         </div>
     </div>
 
-    <!-- Main Content Area -->
     <div class="main">
-        
-        <!-- 1. DASHBOARD -->
         <div id="console" class="section active">
             <h2>Active Bots</h2>
             <div id="bot-list">Loading...</div>
@@ -126,37 +103,44 @@
             <div class="terminal" id="sys-logs"><div class="log-line">Waiting for logs...</div></div>
         </div>
 
-        <!-- 2. VM MANAGER -->
-        <div id="vm" class="section">
-            <h2>VM Power Controls</h2>
-            <div class="card">
-                <p style="color:var(--danger)">⚠️ Warning: These actions affect the entire server.</p>
-                <button class="btn btn-danger" style="width:100%; margin-bottom:10px" onclick="vmAction('reboot')">REBOOT SERVER</button>
-                <button class="btn btn-danger" style="width:100%" onclick="vmAction('shutdown')">SHUTDOWN SERVER</button>
+        <div id="deploy" class="section">
+            <h2>Deploy New Bot</h2>
+            <div class="upload-zone" onclick="document.getElementById('zipInput').click()">
+                <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--accent)"></i>
+                <p>Click to Upload .ZIP file</p>
+                <input type="file" id="zipInput" hidden accept=".zip">
             </div>
+            <input type="text" id="deployName" placeholder="Enter Folder Name (e.g. megabot)">
+            <button class="btn btn-action" onclick="uploadFile()">DEPLOY & UNZIP</button>
         </div>
 
-        <!-- 3. FILE MANAGER -->
         <div id="files" class="section">
-            <h2>File & Bot Cleaner</h2>
+            <h2>Manage Bots</h2>
             <button class="btn btn-restart" onclick="loadFiles()">Refresh List</button>
             <br><br>
             <div class="card">
                 <table class="file-table">
-                    <thead><tr><th>Name</th><th>Size</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Size</th><th>Auto-Delete</th><th>Actions</th></tr></thead>
                     <tbody id="file-body"></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 4. TERMINAL -->
+        <div id="vm" class="section">
+            <h2>VM Power Controls</h2>
+            <div class="card">
+                <p style="color:var(--danger)">⚠️ Warning: Actions affect the entire server.</p>
+                <button class="btn btn-danger" style="width:100%; margin-bottom:10px" onclick="vmAction('reboot')">REBOOT SERVER</button>
+                <button class="btn btn-danger" style="width:100%" onclick="vmAction('shutdown')">SHUTDOWN SERVER</button>
+            </div>
+        </div>
+
         <div id="term" class="section">
             <h2>Root Terminal</h2>
             <div class="terminal" id="term-out" style="height:350px; margin-bottom:10px;">System Ready...</div>
             <input type="text" id="term-in" placeholder="Enter command..." onkeypress="runCmd(event)">
         </div>
 
-        <!-- 5. SUB PANELS -->
         <div id="panels" class="section">
             <h2>Create User Panel</h2>
             <div class="card">
@@ -169,67 +153,36 @@
             <h3>Active Panels</h3>
             <div id="panel-list"></div>
         </div>
-
-        <!-- 6. SETTINGS -->
-        <div id="settings" class="section">
-            <h2>Admin Settings</h2>
-            <div class="card">
-                <label>Change Master Password</label>
-                <input id="new-pass" type="password" placeholder="New Password">
-                <button class="btn btn-action" onclick="changePass()">UPDATE PASSWORD</button>
-            </div>
-        </div>
-
     </div>
 
     <script>
         const socket = io();
-
-        // --- UI LOGIC ---
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
-            document.getElementById('overlay').classList.toggle('active');
-        }
-
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('active'); }
         function showTab(id) {
             document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
             document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
             document.getElementById(id).classList.add('active');
-            
-            // Auto-load data based on tab
             if(id === 'files') loadFiles();
             if(id === 'panels') loadPanels();
-            
-            // Close mobile menu
             if(window.innerWidth <= 768) toggleSidebar();
         }
 
-        // --- SOCKET STATS ---
         socket.on('sys-stats', data => {
-            document.getElementById('cpu-val').innerText = data.cpu;
-            document.getElementById('cpu-bar').style.width = data.cpu;
-            document.getElementById('ram-val').innerText = data.ram;
-            document.getElementById('ram-bar').style.width = (parseFloat(data.ram.split('/')[0]) / parseFloat(data.ram.split('/')[1]) * 100) + '%';
+            document.getElementById('cpu-val').innerText = data.cpu; document.getElementById('cpu-bar').style.width = data.cpu;
+            document.getElementById('ram-val').innerText = data.ram; document.getElementById('ram-bar').style.width = (parseFloat(data.ram.split('/')[0])/parseFloat(data.ram.split('/')[1])*100)+'%';
         });
-
         socket.on('log', data => {
-            const term = document.getElementById('sys-logs');
-            const line = document.createElement('div');
-            line.style.borderBottom = "1px solid #111";
-            line.style.color = data.type === 'err' ? '#ff5555' : '#00ff9d';
-            line.innerText = `[${data.app}] ${data.data}`;
-            term.appendChild(line);
-            term.scrollTop = term.scrollHeight;
+            const term = document.getElementById('sys-logs'); const line = document.createElement('div');
+            line.style.color = data.type === 'err' ? '#ff5555' : '#00ff9d'; line.innerText = `[${data.app}] ${data.data}`;
+            term.appendChild(line); term.scrollTop = term.scrollHeight;
         });
 
-        // --- DASHBOARD (BOTS) ---
+        // BOTS
         async function loadBots() {
             try {
-                const res = await fetch('/api/status');
-                const bots = await res.json();
-                const container = document.getElementById('bot-list');
-                container.innerHTML = '';
+                const res = await fetch('/api/status'); const bots = await res.json();
+                const container = document.getElementById('bot-list'); container.innerHTML = '';
                 bots.forEach(bot => {
                     const statusClass = bot.status === 'online' ? 'online' : 'stopped';
                     container.innerHTML += `
@@ -244,102 +197,84 @@
                 });
             } catch(e){}
         }
-        setInterval(loadBots, 3000);
-        loadBots();
+        setInterval(loadBots, 3000); loadBots();
+        async function action(name, act) { await fetch('/api/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, action: act }) }); loadBots(); }
 
-        async function action(name, act) {
-            await fetch('/api/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name, action: act }) });
-            loadBots();
-        }
-
-        // --- VM MANAGER ---
-        async function vmAction(act) {
-            if(!confirm(`Are you sure you want to ${act.toUpperCase()} the server?`)) return;
-            await fetch('/api/vm/power', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: act }) });
-            alert('Command Sent.');
-        }
-
-        // --- FILES (DELETE BOT) ---
+        // FILES & CLEARER
         async function loadFiles() {
-            const res = await fetch('/api/files');
-            const files = await res.json();
-            const tbody = document.getElementById('file-body');
-            tbody.innerHTML = '';
+            const res = await fetch('/api/files'); const files = await res.json();
+            const tbody = document.getElementById('file-body'); tbody.innerHTML = '';
             files.forEach(f => {
+                const checked = f.autoDelete ? 'checked' : '';
                 tbody.innerHTML += `
                     <tr>
-                        <td>${f.name} ${f.isRunning ? '🟢' : ''}</td>
+                        <td>${f.name}</td>
                         <td>${f.size}</td>
-                        <td><button class="btn btn-stop" onclick="delBot('${f.name}')">DELETE</button></td>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox" ${checked} onchange="toggleAutoDelete('${f.name}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td>
+                            <button class="btn btn-restart" onclick="clearBot('${f.name}')" title="Clean Files"><i class="fas fa-broom"></i></button>
+                            <button class="btn btn-danger" onclick="delBot('${f.name}')" title="Delete Bot"><i class="fas fa-trash"></i></button>
+                        </td>
                     </tr>`;
             });
         }
+        
+        async function uploadFile() {
+            const file = document.getElementById('zipInput').files[0]; const name = document.getElementById('deployName').value;
+            if(!file || !name) return alert("Select file & Enter name");
+            const formData = new FormData(); formData.append('file', file); formData.append('folderName', name);
+            const btn = event.target; btn.innerText = "UPLOADING..."; btn.disabled = true;
+            try {
+                await fetch('/api/upload', { method: 'POST', body: formData });
+                alert("Deployed!"); showTab('files');
+            } catch(e) { alert("Error"); }
+            btn.innerText = "DEPLOY & UNZIP"; btn.disabled = false;
+        }
+
+        async function clearBot(name) {
+            if(!confirm(`Clear all files inside ${name}? (Bot stays)`)) return;
+            await fetch('/api/clear-bot', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+            loadFiles();
+        }
 
         async function delBot(name) {
-            if(!confirm(`Delete bot "${name}" and all files?`)) return;
-            const res = await fetch('/api/delete-bot', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
-            const data = await res.json();
-            if(data.success) { alert('Deleted'); loadFiles(); }
-            else alert(data.error);
+            if(!confirm(`DELETE ${name} PERMANENTLY?`)) return;
+            await fetch('/api/delete-bot', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+            loadFiles();
         }
 
-        // --- TERMINAL ---
+        async function toggleAutoDelete(name, status) {
+            await fetch('/api/toggle-autodelete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, status }) });
+        }
+
+        // TERMINAL & VM & PANELS (Same as before)
         async function runCmd(e) {
             if(e.key !== 'Enter') return;
-            const cmd = document.getElementById('term-in').value;
-            document.getElementById('term-in').value = '';
-            const win = document.getElementById('term-out');
-            win.innerHTML += `\n> ${cmd}\n`;
+            const cmd = document.getElementById('term-in').value; document.getElementById('term-in').value = '';
+            const win = document.getElementById('term-out'); win.innerHTML += `\n> ${cmd}\n`;
             const res = await fetch('/api/terminal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ command: cmd }) });
-            const data = await res.json();
-            win.innerHTML += data.output + '\n';
-            win.scrollTop = win.scrollHeight;
+            const data = await res.json(); win.innerHTML += data.output + '\n'; win.scrollTop = win.scrollHeight;
         }
-
-        // --- PANELS ---
+        async function vmAction(act) {
+            if(!confirm(`${act.toUpperCase()} SERVER?`)) return;
+            await fetch('/api/vm/power', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: act }) });
+        }
         async function createPanel() {
-            const body = {
-                name: document.getElementById('p-name').value,
-                password: document.getElementById('p-pass').value,
-                port: document.getElementById('p-port').value,
-                limit: document.getElementById('p-limit').value
-            };
+            const body = { name: document.getElementById('p-name').value, password: document.getElementById('p-pass').value, port: document.getElementById('p-port').value, limit: document.getElementById('p-limit').value };
             const res = await fetch('/api/create-panel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
             const data = await res.json();
-            if(data.success) { alert(`Panel Created! URL: ${data.url}`); loadPanels(); }
-            else alert(data.error);
+            if(data.success) { alert(`Created: ${data.url}`); loadPanels(); } else alert(data.error);
         }
-
         async function loadPanels() {
-            const res = await fetch('/api/panels');
-            const list = await res.json();
-            const div = document.getElementById('panel-list');
-            div.innerHTML = '';
-            list.forEach(p => {
-                div.innerHTML += `
-                    <div class="card">
-                        <strong>${p.name}</strong> | Port: ${p.port} | Limit: ${p.limit}MB
-                        <button class="btn btn-stop" style="float:right" onclick="delPanel('${p.name}')">DELETE</button>
-                        <br><a href="http://${window.location.hostname}:${p.port}" target="_blank" style="color:var(--accent)">OPEN PANEL</a>
-                    </div>`;
-            });
+            const res = await fetch('/api/panels'); const list = await res.json(); const div = document.getElementById('panel-list'); div.innerHTML = '';
+            list.forEach(p => { div.innerHTML += `<div class="card"><strong>${p.name}</strong> (Port ${p.port})<button class="btn btn-danger" style="float:right" onclick="delPanel('${p.name}')">DEL</button></div>`; });
         }
-
-        async function delPanel(name) {
-            if(!confirm('Delete this panel?')) return;
-            await fetch('/api/delete-panel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
-            loadPanels();
-        }
-
-        // --- SETTINGS ---
-        async function changePass() {
-            const pass = document.getElementById('new-pass').value;
-            await fetch('/api/change-password', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ newPassword: pass }) });
-            alert('Password Updated!');
-        }
-
+        async function delPanel(name) { if(confirm('Delete?')) { await fetch('/api/delete-panel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) }); loadPanels(); }}
     </script>
 </body>
 </html>
-
-
